@@ -1,0 +1,5 @@
+*.pyc
+*.bc
+*.s
+*.wasm
+*.wast
