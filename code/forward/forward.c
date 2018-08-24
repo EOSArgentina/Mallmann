@@ -27,17 +27,17 @@ typedef struct chain_config {
 } __attribute__((packed, aligned(16))) chain_config_t;
 
 void handle(void* data, uint32_t size) {
-	chain_config_t* cc = (chain_config_t*)(((char*)data)+size);
-	
-	uint32_t s = get_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
-	uint32_t old_max_inline_action_size = cc->max_inline_action_size;
-	cc->max_inline_action_size = (uint32_t)(-1);
-	set_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
-	
-	send_inline(data, size);
+  chain_config_t* cc          = (chain_config_t*)(((char*)data)+size);
 
-	cc->max_inline_action_size = old_max_inline_action_size;
-	set_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
+  uint32_t s = get_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
+  uint32_t old_max_inline_action_size = cc->max_inline_action_size;
+  cc->max_inline_action_size = (uint32_t)(-1);
+  set_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
+
+  send_inline(data, size);
+
+  cc->max_inline_action_size = old_max_inline_action_size;
+  set_blockchain_parameters_packed((char*)cc, sizeof(chain_config_t));
 }
 
 #include "../apply.c"
