@@ -1,5 +1,6 @@
 import io
 import struct
+from base58 import b58decode
 
 def char_to_symbol(c):
   if c >= ord('a') and c <= ord('z'):
@@ -14,8 +15,8 @@ def string_to_name(s):
   while i<len(s) and i < 12:
     name |= (char_to_symbol(ord(s[i])) & 0x1f) << (64 - 5 * (i + 1))
     i += 1
-  if i == 12:
-      name |= char_to_symbol(ord(str[12])) & 0x0F
+  if i == 12 and i < len(s):
+      name |= char_to_symbol(ord(s[12])) & 0x0F
   return name;
 
 def string_to_symbol(precision, s):
@@ -196,7 +197,16 @@ class DataStream(io.BytesIO):
     raise Exception("not implementd")
 
   def pack_public_key(self, v):
-    raise Exception("not implementd")
+    if v.startswith("EOS"):
+      data = b58decode(str(v[3:]))
+      if len(data) != 37: raise Exception("invalid k1 key")
+      self.pack_uint8(0)
+      self.write(data[:-4])
+    elif v.startswith("PUB_R1_"):
+      raise Exception("not implementd")
+    else:
+      raise Exception("invalid pubkey format")
+
   def unpack_public_key(self):
     raise Exception("not implementd")
 

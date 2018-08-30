@@ -35,6 +35,68 @@ class abi_serializer:
       if s["name"] == table_name: return s
     return None
 
+  def abi_to_bin(self):
+    ds = DataStream()
+    
+    # version
+    ds.pack_string(self.abi["version"])
+
+    # types
+    ds.pack_varuint32(len(self.abi["types"]))
+    for t in self.abi["types"]:
+      ds.pack_string(t["new_type_name"])
+      ds.pack_string(t["type"])
+
+    # structs
+    ds.pack_varuint32(len(self.abi["structs"]))
+    for s in self.abi["structs"]:
+      ds.pack_string(s["name"])
+      ds.pack_string(s["base"])
+      ds.pack_varuint32(len(s["fields"]))
+      for fd in s["fields"]:
+        ds.pack_string(fd["name"])
+        ds.pack_string(fd["type"])
+
+    # actions
+    ds.pack_varuint32(len(self.abi["actions"]))
+    for a in self.abi["actions"]:
+      ds.pack_account_name(a["name"])
+      ds.pack_string(a["type"])
+      ds.pack_string(a["ricardian_contract"])
+
+    # tables
+    ds.pack_varuint32(len(self.abi["tables"]))
+    for t in self.abi["tables"]:
+      ds.pack_account_name(t["name"])
+      ds.pack_string(t["index_type"])
+      ds.pack_varuint32(len(t["key_names"]))
+      for kn in t["key_names"]:
+        ds.pack_string(kn)
+      ds.pack_varuint32(len(t["key_types"]))
+      for kt in t["key_types"]:
+        ds.pack_string(kt)
+      ds.pack_string(t["type"])
+
+    # ricardian_clauses
+    ds.pack_varuint32(len(self.abi["ricardian_clauses"]))
+    for rc in self.abi["ricardian_clauses"]:
+      ds.pack_string(rc["id"])
+      ds.pack_string(rc["body"])
+
+    # error_messages
+    ds.pack_varuint32(len(self.abi["error_messages"]))
+    for em in self.abi["error_messages"]:
+      ds.pack_uint64(em["error_code"])
+      ds.pack_string(em["error_msg"])
+   
+    # abi_extensions
+    ds.pack_varuint32(len(self.abi["abi_extensions"]))
+    for ae in self.abi["abi_extensions"]:
+      ds.pack_uint16(ae[0])
+      ds.pack_bytes(ae[1].decode('hex'))
+
+    return ds.getvalue()
+
   def get_action_type(self, name):
     action = self.find_action(name)
     if not action:
@@ -116,7 +178,7 @@ class abi_serializer:
             ds.pack_array(t[0], v)
 
         elif type(t) == Object:
-          if type(v) != dict: raise Exception("v must be a dict")
+          if type(v) != dict and type(v) != OrderedDict: raise Exception("v must be a dict ({0})".format(type(v)))
           pack_object(t.fields, v.values()[0])
         else:
           getattr(ds, 'pack_'+t)(v)

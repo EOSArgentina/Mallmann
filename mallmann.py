@@ -2,6 +2,8 @@ import os
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from collections import OrderedDict
+from tempfile import mktemp
+from subprocess import Popen, PIPE
 
 from lib import *
 
@@ -44,7 +46,8 @@ class Mallmann:
   tx           = {}
   abi_folder   = MALLMANN_ROOT + '/abis'
   code_folder  = MALLMANN_ROOT + '/code'
-  
+  api          = Api()
+
   def __init__(self):
     self.gen_tx()
 
@@ -84,6 +87,10 @@ class Mallmann:
   def get_auth(self):
     return self.authority
 
+  def clear(self):
+    self.gen_tx()
+    return self
+
   def gen_tx(self):
     self.tx = OrderedDict([
       ("expiration", self.calc_expiration(datetime.utcnow(), hours=1)),
@@ -104,7 +111,9 @@ class Mallmann:
     return self
 
   def load_code(self, name):
-    with open(self.code_folder + "/{0}/{0}.wasm".format(name)) as fp:
+    if not name.startswith('/'):
+      name = self.code_folder + "/{0}/{0}.wasm".format(name)
+    with open(name) as fp:
       data = fp.read()
       return data
   
@@ -113,6 +122,28 @@ class Mallmann:
 
   def get_tx(self):
     return self.tx
+
+  def sign(self, privkey):
+    tmpf = mktemp()
+
+    tx = self.get_tx().copy()
+    tx["signatures"] = []
+    
+    with open(tmpf,"w") as f:
+      f.write(json.dumps(tx))
+
+    with open(os.devnull, 'w') as devnull:
+      cmd = ["cleos","sign","-k",privkey, tmpf]
+      p = Popen(cmd, stdout=PIPE, stderr=devnull)
+      output, err = p.communicate("")
+
+    if p.returncode:
+      return
+    
+    signed_tx = json.loads(output)
+    self.get_tx()["signatures"].append(signed_tx["signatures"][0])
+
+    return self
 
   def print_tx(self):
     print json.dumps(self.tx, sort_keys=False, indent=2)
