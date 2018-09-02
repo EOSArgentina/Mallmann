@@ -1,3 +1,5 @@
+import re
+import io
 import json
 from collections import OrderedDict
 from ds import DataStream
@@ -8,12 +10,28 @@ class abi_serializer:
   def from_dict(abi):
     abis = abi_serializer()
     abis.abi = abi
+
+    try:
+      abis.abi_to_bin()
+    except Exception as ex:
+      print "Invalid abi file"
+      raise ex
+
     return abis
 
   @staticmethod
   def from_file(file):
-    with open(file) as fp:
+    with io.open(file, encoding='utf-8', mode='r') as fp:
       return abi_serializer.from_dict(json.loads(fp.read(), object_pairs_hook=OrderedDict))
+
+  @staticmethod
+  def from_bin(binabi):
+    ds = DataStream(binabi)
+    return abi_serializer.from_dict(ds.unpack_abi())
+
+  @staticmethod
+  def from_hex(hexabi):
+    return abi_serializer.from_bin(hexabi.decode('hex'))
 
   def resolve_type(self, type):
     for t in self.abi["types"]:
@@ -37,65 +55,14 @@ class abi_serializer:
 
   def abi_to_bin(self):
     ds = DataStream()
-    
-    # version
-    ds.pack_string(self.abi["version"])
-
-    # types
-    ds.pack_varuint32(len(self.abi["types"]))
-    for t in self.abi["types"]:
-      ds.pack_string(t["new_type_name"])
-      ds.pack_string(t["type"])
-
-    # structs
-    ds.pack_varuint32(len(self.abi["structs"]))
-    for s in self.abi["structs"]:
-      ds.pack_string(s["name"])
-      ds.pack_string(s["base"])
-      ds.pack_varuint32(len(s["fields"]))
-      for fd in s["fields"]:
-        ds.pack_string(fd["name"])
-        ds.pack_string(fd["type"])
-
-    # actions
-    ds.pack_varuint32(len(self.abi["actions"]))
-    for a in self.abi["actions"]:
-      ds.pack_account_name(a["name"])
-      ds.pack_string(a["type"])
-      ds.pack_string(a["ricardian_contract"])
-
-    # tables
-    ds.pack_varuint32(len(self.abi["tables"]))
-    for t in self.abi["tables"]:
-      ds.pack_account_name(t["name"])
-      ds.pack_string(t["index_type"])
-      ds.pack_varuint32(len(t["key_names"]))
-      for kn in t["key_names"]:
-        ds.pack_string(kn)
-      ds.pack_varuint32(len(t["key_types"]))
-      for kt in t["key_types"]:
-        ds.pack_string(kt)
-      ds.pack_string(t["type"])
-
-    # ricardian_clauses
-    ds.pack_varuint32(len(self.abi["ricardian_clauses"]))
-    for rc in self.abi["ricardian_clauses"]:
-      ds.pack_string(rc["id"])
-      ds.pack_string(rc["body"])
-
-    # error_messages
-    ds.pack_varuint32(len(self.abi["error_messages"]))
-    for em in self.abi["error_messages"]:
-      ds.pack_uint64(em["error_code"])
-      ds.pack_string(em["error_msg"])
-   
-    # abi_extensions
-    ds.pack_varuint32(len(self.abi["abi_extensions"]))
-    for ae in self.abi["abi_extensions"]:
-      ds.pack_uint16(ae[0])
-      ds.pack_bytes(ae[1].decode('hex'))
-
+    ds.pack_abi(self.abi)
     return ds.getvalue()
+
+  def abi_to_json(self):
+    res = json.dumps(self.abi, indent=2, separators=(',', ': '))
+    res = re.sub(ur'\[\n\s+\{\n', ur'[{\n', res)
+    res = re.sub(ur'\},\n\s+\{\n', ur'},{\n', res)
+    return res
 
   def get_action_type(self, name):
     action = self.find_action(name)
@@ -157,8 +124,6 @@ class abi_serializer:
     def pack_object(types, values):
 
       if len(types) != len(values):
-        print types
-        print values
         raise Exception("invalid number of args expected:{0} received:{1}".format(len(types), len(values)))
 
       for i in xrange(len(types)):

@@ -20,10 +20,10 @@ m = m.eosio.setcode("eosio.prods", 0, 0, m.load_code("forward"))
 m = m.auth("eosio","active")
 m = m.eosio.setpriv("eosio.prods", 1)
 m = m.eosio_prods.raw_call(
-  m.action_to_hex(m.get_contract("eosio.token").call_action(
+  m.get_contract("eosio.token").build_action(
     "transfer", (account,"active"),
     account, "eosio", amount, "-=PuNGA=-"
-  ))
+  )
 )
 m = m.auth("eosio.prods","active")
 m = m.eosio.setcode("eosio.prods", 0, 0, m.load_code("void"))

@@ -1,4 +1,5 @@
 import os 
+import json
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from collections import OrderedDict
@@ -6,6 +7,12 @@ from tempfile import mktemp
 from subprocess import Popen, PIPE
 
 from lib import *
+
+class ByteArrayEncoder(json.JSONEncoder):
+  def default(self, obj):
+    if isinstance(obj, bytearray):
+      return str(obj).encode('hex')
+    return json.JSONEncoder.default(self, obj)
 
 class Contract(object):
 
@@ -17,7 +24,7 @@ class Contract(object):
     self.abis = abis
 
   @staticmethod
-  def build_action(account, action, authority, data):
+  def build_action_binary(account, action, authority, data):
     return OrderedDict([
       ("account", account),
       ("name", action),
@@ -26,11 +33,11 @@ class Contract(object):
           ("permission", authority[1])
         ])
       ]),
-      ("data", data.encode('hex'))
+      ("data", data)
     ])
 
-  def call_action(self, action, authority, *values):
-    return Contract.build_action(
+  def build_action(self, action, authority, *values):
+    return Contract.build_action_binary(
       self.name, action, authority,
       self.abis.type_to_bin(
         self.abis.get_action_type(action), *values
@@ -63,14 +70,10 @@ class Mallmann:
     self.contracts[name] = Contract(name, abi_serializer.from_file(abi_file))
     return self
 
-  def action_to_hex(self, action):
-    #TODO: fix this
-    action["data"] = action["data"].decode('hex')
-    return abi_serializer.from_file(
-      self.abi_folder + '/_core.abi').type_to_bin("action", *action.values()
-    )
-
   def serialize(self, types, values):
+    if type(types) != tuple: types = (types,)
+    if type(values) != tuple: values = (values,)
+    
     ds = DataStream()
     for i in xrange(len(types)):
       getattr(ds, 'pack_'+types[i])(values[i])
@@ -120,7 +123,12 @@ class Mallmann:
   def calc_expiration(self, now, days=0, hours=0, minutes=0):
     return (now+relativedelta(days=days, hours=hours, minutes=minutes)).strftime('%Y-%m-%dT%H:%M:%S')
 
-  def get_tx(self):
+  def get_tx(self, binary=False):
+    if binary == True:
+      ds = DataStream()
+      ds.pack_transaction(self.tx)
+      return ds.getvalue()
+
     return self.tx
 
   def sign(self, privkey):
@@ -130,7 +138,7 @@ class Mallmann:
     tx["signatures"] = []
     
     with open(tmpf,"w") as f:
-      f.write(json.dumps(tx))
+      f.write(self.tx_to_json())
 
     with open(os.devnull, 'w') as devnull:
       cmd = ["cleos","sign","-k",privkey, tmpf]
@@ -145,8 +153,11 @@ class Mallmann:
 
     return self
 
+  def tx_to_json(self):
+    return json.dumps(self.tx, sort_keys=False, cls=ByteArrayEncoder, indent=2, separators=(',', ': '))
+    
   def print_tx(self):
-    print json.dumps(self.tx, sort_keys=False, indent=2)
+    print self.tx_to_json()
 
   def __getattr__(self, attr):
     class AuthWrapper:
@@ -162,12 +173,12 @@ class Mallmann:
           action = None
           if action_name == "raw_call":
             payload = args[0]
-            if type(payload) == dict or type(payload) == OrderedDict: payload = self.action_to_hex(payload)
-            action = Contract.build_action(this.contract_name, "raw", this.authority, payload)
+            if type(payload) == dict or type(payload) == OrderedDict: payload = self.serialize("action", payload)
+            action = Contract.build_action_binary(this.contract_name, "raw", this.authority, payload)
           else:
             if this.contract_name not in self.contracts:
               raise Exception("contract {0} not loaded".format(this.contract_name))
-            action = self.contracts[this.contract_name].call_action(action_name, this.authority, *args)
+            action = self.contracts[this.contract_name].build_action(action_name, this.authority, *args)
           
           self.tx["actions"].append(action)
           return self

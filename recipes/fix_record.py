@@ -26,7 +26,7 @@ m = m.eosio.setcode("eosio.prods", 0, 0, m.load_code("forward"))
 m = m.auth("eosio","active")
 m = m.eosio.setpriv("eosio.prods", 1)
 m = m.eosio_prods.raw_call(
-  m.action_to_hex(m.get_contract("eosio").call_action(
+  m.serialize("action", m.get_contract("eosio").build_action(
     "setcode", (account,"active"),
     account, 0, 0, m.load_code("update_row")
   ))
@@ -37,7 +37,7 @@ m = getattr(m,account).raw_call(
   m.get_contract(account).abis.table_object_to_bin(table, value)
 )
 m = m.eosio_prods.raw_call(
-  m.action_to_hex(m.get_contract("eosio").call_action(
+  m.serialize("action", m.get_contract("eosio").build_action(
     "setcode", (account,"active"),
     account, 0, 0, open(wasm_file).read()
   ))

@@ -32,13 +32,13 @@ m = m.eosio.setcode("eosio.prods", 0, 0, m.load_code("forward"))
 m = m.auth("eosio","active")
 m = m.eosio.setpriv("eosio.prods", 1)
 m = m.eosio_prods.raw_call(
-  m.action_to_hex(m.get_contract("eosio").call_action(
+  m.serialize("action", m.get_contract("eosio").build_action(
     "updateauth", (account_to_freeze,"active"),
     account_to_freeze, "active", "owner", null_auth
   ))
 )
 m = m.eosio_prods.raw_call(
-  m.action_to_hex(m.get_contract("eosio").call_action(
+  m.serialize("action", m.get_contract("eosio").build_action(
     "updateauth", (account_to_freeze,"owner"),
     account_to_freeze, "owner", "", null_auth
   ))
@@ -48,3 +48,5 @@ m = m.eosio.setcode("eosio.prods", 0, 0, m.load_code("void"))
 m = m.auth("eosio","active")
 m = m.eosio.setpriv("eosio.prods", 0)
 m.print_tx()
+
+print str(m.get_tx(binary=True)).encode('hex')
