@@ -1,15 +1,15 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
-WASM_ROOT=/opt/wasm
-EOS_INSTALL=/opt/eos
+WASM_ROOT=${WASM_ROOT:-"/opt/wasm"}
+EOS_INSTALL=${EOS_INSTALL:-"/opt/eos"}
 CODE=$DIR
 
 if [ ! -f $WASM_ROOT/bin/clang ]; then echo "$WASM_ROOT/bin/clang not found, please set WASM_ROOT env variable"; exit; fi
 if [ ! -f $WASM_ROOT/bin/llc ]; then echo "$WASM_ROOT/bin/llc not found, please set WASM_ROOT env variable"; exit; fi
 if [ ! -f $EOS_INSTALL/bin/eosio-s2wasm ]; then echo "$EOS_INSTALL/bin/eosio-s2wasm not found, please set EOS_INSTALL env variable"; exit; fi
 if [ ! -f $EOS_INSTALL/bin/eosio-wast2wasm ]; then echo "$EOS_INSTALL/bin/eosio-wast2wasm not found, please set EOS_INSTALL env variable"; exit; fi
-	
+
 for i in "forward" "set_resource_limits" "update_row" "void"; do
 	$WASM_ROOT/bin/clang -emit-llvm -O3 --target=wasm32 -nostdinc \
 	     -nostdlib -ffreestanding -nostdlib \
