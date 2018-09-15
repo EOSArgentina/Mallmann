@@ -49,5 +49,8 @@ class Api(object):
   def __init__(self, host=RPC_NODE):
     self.host = host
 
+  def set_host(self, host):
+    self.host = host
+
   def __getattr__(self, attr):
     return ApiVerWrapper(self.host, attr)

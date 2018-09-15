@@ -96,5 +96,6 @@
     }
   ],
   "ricardian_clauses": [],
+  "error_messages": [],
   "abi_extensions": []
 }

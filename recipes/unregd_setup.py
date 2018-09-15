@@ -5,10 +5,11 @@ sys.path.append("..")
 
 import json
 from sha3 import keccak_256
+from hashlib import sha256
 from bitcoin import privtopub, random_key, encode_privkey
 from random import random
 from collections import OrderedDict
-from mallmann import Mallmann, abi_serializer, Api
+from mallmann import Mallmann, abi_serializer, Api, ByteArrayEncoder
 
 if len(sys.argv) < 2:
   print "usage: unregd_setup.py UNREGD_FOLDER"
@@ -23,6 +24,12 @@ eosio_active = OrderedDict([
     ("permission" , OrderedDict([
       ("actor"     , "eosio"),
       ("permission", "active"),
+    ])),
+    ("weight"     , 1)
+  ]), OrderedDict([
+    ("permission" , OrderedDict([
+      ("actor"     , "eosio.unregd"),
+      ("permission", "eosio.code"),
     ])),
     ("weight"     , 1)
   ])]),
@@ -55,7 +62,7 @@ if not os.path.isfile("unreg_data.json"):
     unreg_data.append(gen_random_unreg_data())
 
   with open("unreg_data.json","w") as fp:
-    fp.write(json.dumps(unreg_data, indent=2))
+    fp.write(json.dumps(unreg_data, indent=2, cls=ByteArrayEncoder))
 else:
   with open("unreg_data.json","r") as fp:
     unreg_data = json.loads(fp.read())
@@ -79,15 +86,24 @@ with open("tx1.json","w") as fp:
   p1 = propose.copy()
   p1["trx"] = m.get_tx().copy()
   p1["proposal_name"] = "eosiounregd1"
-  fp.write(json.dumps(p1, indent=2))
+  fp.write(json.dumps(p1, indent=2, cls=ByteArrayEncoder))
   print "tx1.json generated ..."
+
+# Craft setcode/setabi tx
+with open(unregd_wasm,"r") as fp:
+  wasm = fp.read()
+
+abi = m.get_contract("eosio.unregd").abis.abi_to_bin()
+
+print "sha256(wasm) = {0}".format(sha256(wasm).digest().encode('hex'))
+print "sha256(abi) = {0}".format(sha256(abi).digest().encode('hex'))
 
 # Tx2 (setcode eosio.unregd + setmaxeos + issue tokens)
 m = m.clear()
 m = m.expires_in(days=5)
 m = m.auth("eosio.unregd","active")
-m = m.eosio.setcode("eosio.unregd", 0, 0, m.load_code(unregd_wasm))
-m = m.eosio.setabi("eosio.unregd", m.get_contract("eosio.unregd").abis.abi_to_bin())
+m = m.eosio.setcode("eosio.unregd", 0, 0, wasm)
+m = m.eosio.setabi("eosio.unregd", abi)
 m = m.eosio_unregd.setmaxeos("1.0000 EOS")
 
 total = 0.0
@@ -102,8 +118,8 @@ m = m.eosio_token.issue("eosio.regram", "%.4f EOS" % (len(unreg_data)), "EOS to 
 with open("tx2.json","w") as fp:
   p2 = propose.copy()
   p2["trx"] = m.get_tx().copy()
-  p2["proposal_name"] = "eosiounregd2"
-  fp.write(json.dumps(p2, indent=2))
+  p2["proposal_name"] = "eosiounregd3"
+  fp.write(json.dumps(p2, indent=2, cls=ByteArrayEncoder))
   print "tx2.json generated ..."
 
 print "done"

@@ -131,7 +131,7 @@ class Mallmann:
 
     return self.tx
 
-  def sign(self, privkey):
+  def sign(self, privkey, url=None, push=False):
     tmpf = mktemp()
 
     tx = self.get_tx().copy()
@@ -141,23 +141,33 @@ class Mallmann:
       f.write(self.tx_to_json())
 
     with open(os.devnull, 'w') as devnull:
-      cmd = ["cleos","sign","-k",privkey, tmpf]
+      cmd = ["cleos"]
+      if url:
+        cmd += ["-u", url]
+      cmd += ["sign"]
+      if push: cmd += ["-p"]
+      cmd += ["-k", privkey, tmpf]
       p = Popen(cmd, stdout=PIPE, stderr=devnull)
       output, err = p.communicate("")
 
     if p.returncode:
       return
-    
-    signed_tx = json.loads(output)
-    self.get_tx()["signatures"].append(signed_tx["signatures"][0])
+
+    if not push:
+      signed_tx = json.loads(output)
+      self.get_tx()["signatures"].append(signed_tx["signatures"][-1])
 
     return self
 
   def tx_to_json(self):
     return json.dumps(self.tx, sort_keys=False, cls=ByteArrayEncoder, indent=2, separators=(',', ': '))
-    
+
   def print_tx(self):
     print self.tx_to_json()
+
+  def set_api_host(self, host):
+    self.api.set_host(host)
+    return self
 
   def __getattr__(self, attr):
     class AuthWrapper:
@@ -183,5 +193,5 @@ class Mallmann:
           self.tx["actions"].append(action)
           return self
         return handler
-    
+
     return AuthWrapper(attr)

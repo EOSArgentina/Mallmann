@@ -116,14 +116,11 @@ class abi_serializer:
           types.append(type_name)
       return types
 
-    types = flat_struct(struct)
-    values = flat_args(args)
-
-    ds = DataStream(b'')
-
-    def pack_object(types, values):
+    def pack_object(ds, types, values):
 
       if len(types) != len(values):
+        print types
+        print values
         raise Exception("invalid number of args expected:{0} received:{1}".format(len(types), len(values)))
 
       for i in xrange(len(types)):
@@ -138,15 +135,19 @@ class abi_serializer:
             ds.pack_varuint32(len(v))
             for vi in v:
               if type(vi) != dict: raise Exception("vi must be a dict")
-              pack_object(t[0].fields, vi.values()[0])
+              pack_object(ds, t[0].fields, vi.values()[0])
           else:
             ds.pack_array(t[0], v)
 
         elif type(t) == Object:
           if type(v) != dict and type(v) != OrderedDict: raise Exception("v must be a dict ({0})".format(type(v)))
-          pack_object(t.fields, v.values()[0])
+          pack_object(ds, t.fields, v.values()[0])
         else:
           getattr(ds, 'pack_'+t)(v)
 
-    pack_object(types, values)
+    types = flat_struct(struct)
+    values = flat_args(args)
+    
+    ds = DataStream()
+    pack_object(ds, types, values)
     return ds.getvalue()

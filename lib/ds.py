@@ -1,6 +1,8 @@
 import io
 import struct
 import time
+import hashlib
+import calendar
 from datetime import datetime
 from base58 import b58decode
 from collections import OrderedDict
@@ -65,10 +67,20 @@ def asset_to_uint64_pair(a):
   num = ''.join(nums)
   return int(num), string_to_symbol(len(nums[1]), parts[1])
 
-class DataStream(io.BytesIO):
+class DataStream():
   
+  def __init__(self, stream=None):
+    if not stream: stream = io.BytesIO()
+    self.stream = stream
+
+  def write(self, v):
+    self.stream.write(v)
+
+  def read(self, n):
+    return self.stream.read(n)
+
   def getvalue(self):
-    return bytearray(io.BytesIO.getvalue(self))
+    return bytearray(self.stream.getvalue())
 
   def pack_array(self, type, values):
     self.pack_varuint32(len(values))
@@ -190,7 +202,7 @@ class DataStream(io.BytesIO):
     raise Exception("not implementd")
 
   def pack_time_point_sec(self, v):
-    t = int(time.mktime(datetime.strptime(v,'%Y-%m-%dT%H:%M:%S').timetuple()))
+    t = int(calendar.timegm(datetime.strptime(v,'%Y-%m-%dT%H:%M:%S').timetuple()))
     self.pack_uint32(t)
   def unpack_time_point_sec(self):
     t = self.unpack_uint32()
@@ -239,8 +251,12 @@ class DataStream(io.BytesIO):
     self.pack_array("action",v["context_free_actions"])
     self.pack_array("action",v["actions"])
     self.pack_array("extension", v["transaction_extensions"])
+
+  def pack_signed_transaction(self, v):
+    self.pack_transaction(v)
     self.pack_array("signature", v["signatures"])
     self.pack_array("bytes", v["context_free_data"])
+  
   def unpack_transaction(self):
     return OrderedDict([
       ("expiration", self.unpack_time_point_sec()),
@@ -252,9 +268,15 @@ class DataStream(io.BytesIO):
       ("context_free_actions", self.unpack_array("action")),
       ("action", self.unpack_array("action")),
       ("transaction_extensions", self.unpack_array("extension")),
+    ])
+  
+  def unpack_signed_transaction(self):
+    r = self.unpack_transaction(self)
+    r.update(OrderedDict([
       ("signatures", self.unpack_signature()),
       ("context_free_data", self.unpack_array("bytes"))
-    ])
+    ]))
+    return r
 
   def pack_name(self, v):
     self.pack_account_name(v)
@@ -292,7 +314,7 @@ class DataStream(io.BytesIO):
     if v.startswith("EOS"):
       data = b58decode(str(v[3:]))
       if len(data) != 33+4: raise Exception("invalid k1 key")
-      if ripmed160(data[:-4])[:4] == data[-4:]: raise Exception("checksum failed")
+      if ripmed160(data[:-4])[:4] != data[-4:]: raise Exception("checksum failed")
       self.pack_uint8(0)
       self.write(data[:-4])
     elif v.startswith("PUB_R1_"):
@@ -315,7 +337,7 @@ class DataStream(io.BytesIO):
     def pack_signature_sufix(b58sig, sufix):
       data = b58decode(b58sig)
       if len(data) != 65+4: raise Exception("invalid {0} signature".format(sufix))
-      if ripmed160(data[:-4]+sufix)[:4] == data[-4:]: raise Exception("checksum failed")
+      if ripmed160(data[:-4]+sufix)[:4] != data[-4:]: raise Exception("checksum failed")
       self.pack_uint8(0)
       self.write(data[:-4])
     
@@ -451,3 +473,60 @@ class DataStream(io.BytesIO):
     raise Exception("not implementd")
   def unpack_extended_asset(self):
     raise Exception("not implementd")
+
+  def pack_sha256(self, v):
+    if len(v) != 64: raise Exception("Invalid sha256 length")
+    self.write(v.decode('hex'))
+  def unpack_sha256(self):
+    d = self.read(32)
+    return d.encode('hex')
+
+  def pack_chain_id_type(self, v):
+    self.pack_sha256(v)
+  def unpack_chain_id_type(self):
+    self.unpack_sha256()
+
+  def pack_block_id_type(self, v):
+    self.pack_sha256(v)
+  def unpack_block_id_type(self):
+    self.unpack_sha256()
+  
+  def pack_tstamp(self, v):
+    self.pack_uint64(v)
+  def unpack_tstamp(self):
+    self.unpack_uint64()
+
+  def pack_handshake_message(self, v):
+    self.pack_uint16(v.network_version)
+    self.pack_chain_id_type(v.chain_id)
+    self.pack_sha256(v.node_id)
+    self.pack_public_key(v.key)
+    self.pack_tstamp(v.time)
+    self.pack_sha256(v.token)
+    self.pack_signature(v.sig)
+    self.pack_string(v.p2p_address)
+    self.pack_uint32(v.last_irreversible_block_num)
+    self.pack_block_id_type(v.last_irreversible_block_id)
+    self.pack_uint32(v.head_num)
+    self.pack_block_id_type(v.head_id)
+    self.pack_string(v.os)
+    self.pack_string(v.agent)
+    self.pack_int16(v.generation)
+  def unpack_handshake_message(self):
+    return [
+      self.unpack_uint16(),
+      self.unpack_chain_id_type(),
+      self.unpack_sha256(),
+      self.unpack_public_key(),
+      self.unpack_tstamp(),
+      self.unpack_sha256(),
+      self.unpack_signature(),
+      self.unpack_string(),
+      self.unpack_uint32(),
+      self.unpack_block_id_type(),
+      self.unpack_uint32(),
+      self.unpack_block_id_type(),
+      self.unpack_string(),
+      self.unpack_string(),
+      self.unpack_int16()
+    ]
