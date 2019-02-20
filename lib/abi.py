@@ -1,8 +1,9 @@
 import re
 import io
 import json
+import codecs
 from collections import OrderedDict
-from ds import DataStream
+from .ds import DataStream
 
 class abi_serializer:
 
@@ -14,7 +15,7 @@ class abi_serializer:
     try:
       abis.abi_to_bin()
     except Exception as ex:
-      print "Invalid abi file"
+      print("Invalid abi file")
       raise ex
 
     return abis
@@ -31,7 +32,7 @@ class abi_serializer:
 
   @staticmethod
   def from_hex(hexabi):
-    return abi_serializer.from_bin(hexabi.decode('hex'))
+    return abi_serializer.from_bin(codecs.decode(hexabi,'hex'))
 
   def resolve_type(self, type):
     for t in self.abi["types"]:
@@ -60,8 +61,8 @@ class abi_serializer:
 
   def abi_to_json(self):
     res = json.dumps(self.abi, indent=2, separators=(',', ': '))
-    res = re.sub(ur'\[\n\s+\{\n', ur'[{\n', res)
-    res = re.sub(ur'\},\n\s+\{\n', ur'},{\n', res)
+    res = re.sub(r'\[\n\s+\{\n', r'[{\n', res)
+    res = re.sub(r'\},\n\s+\{\n', r'},{\n', res)
     return res
 
   def get_action_type(self, name):
@@ -88,7 +89,7 @@ class abi_serializer:
 
     def flat_args(l):
       values = []
-      for i in xrange(len(l)):
+      for i in range(len(l)):
         if type(l[i]) == list:
           values.append(flat_args(l[i]))
         elif type(l[i]) == dict or type(l[i]) == OrderedDict:
@@ -119,11 +120,11 @@ class abi_serializer:
     def pack_object(ds, types, values):
 
       if len(types) != len(values):
-        print types
-        print values
+        print(types)
+        print(values)
         raise Exception("invalid number of args expected:{0} received:{1}".format(len(types), len(values)))
 
-      for i in xrange(len(types)):
+      for i in range(len(types)):
         t = types[i]
         v = values[i]
 

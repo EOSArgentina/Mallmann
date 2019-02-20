@@ -11,7 +11,7 @@ from lib import *
 class ByteArrayEncoder(json.JSONEncoder):
   def default(self, obj):
     if isinstance(obj, bytearray):
-      return str(obj).encode('hex')
+      return obj.hex()
     return json.JSONEncoder.default(self, obj)
 
 class Contract(object):
@@ -75,7 +75,7 @@ class Mallmann:
     if type(values) != tuple: values = (values,)
     
     ds = DataStream()
-    for i in xrange(len(types)):
+    for i in range(len(types)):
       getattr(ds, 'pack_'+types[i])(values[i])
     return ds.getvalue()
 
@@ -163,7 +163,7 @@ class Mallmann:
     return json.dumps(self.tx, sort_keys=False, cls=ByteArrayEncoder, indent=2, separators=(',', ': '))
 
   def print_tx(self):
-    print self.tx_to_json()
+    print( self.tx_to_json() )
 
   def set_api_host(self, host):
     self.api.set_host(host)

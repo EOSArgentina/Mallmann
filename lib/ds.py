@@ -28,34 +28,37 @@ def string_to_name(s):
     i += 1
   if len(s) == 13:
       name |= char_to_symbol(ord(s[12])) & 0x0F
-  return name;
+  return name
 
 def name_to_string(n, strip_dots=True):
   charmap = ".12345abcdefghijklmnopqrstuvwxyz"
-  s = bytearray(13*'.')
-  tmp = n;
-  for i in xrange(13):
+  s = bytearray(13*b'.')
+  tmp = n
+  for i in range(13):
     c = charmap[tmp & (0x0f if i == 0 else 0x1f)]
-    s[12-i] = c
+    s[12-i] = ord(c)
     tmp >>= (4 if i == 0 else 5)
 
-  s = str(s)
+  s = s.decode('utf8') 
   if strip_dots: 
     s = s.strip('.')
-  return s 
+  return s
 
 def string_to_symbol(precision, s):
   l = len(s)
   if l > 7: raise Exception("invalid symbol {0}".format(s))
   result = 0
-  for i in xrange(l):
+  for i in range(l):
     if ord(s[i]) < ord('A') or ord(s[i]) > ord('Z'):
       raise Exception("invalid symbol {0}".format(s))
     else:
-      result |= (int(ord(s[i])) << (8*(1+i)));
+      result |= (int(ord(s[i])) << (8*(1+i)))
   
-  result |= int(precision);
-  return result;
+  result |= int(precision)
+  return result
+
+def symbol_to_string(symbol):
+  return result
 
 def asset_to_uint64_pair(a):
   parts = a.split()
@@ -70,7 +73,10 @@ def asset_to_uint64_pair(a):
 class DataStream():
   
   def __init__(self, stream=None):
-    if not stream: stream = io.BytesIO()
+    if not stream: 
+      stream = io.BytesIO()
+    else:
+      stream = io.BytesIO(stream)
     self.stream = stream
 
   def write(self, v):
@@ -89,7 +95,7 @@ class DataStream():
   def unpack_array(self, type):
     l = self.unpack_varuint32()
     res = []
-    for i in xrange(l):
+    for i in range(l):
       res.append(getattr(self, 'unpack_'+type)())
     return res
 
@@ -103,7 +109,7 @@ class DataStream():
     ]
 
   def pack_bool(self, v):
-    self.write(b'\x00') if v else self.write(b'\x01')
+    self.write(b'\x01') if v else self.write(b'\x00')
   def unpack_bool(self):
     return True if self.read(1) else False
 
@@ -285,15 +291,17 @@ class DataStream():
 
   def pack_bytes(self, v):
     self.pack_varuint32(len(v))
+    if type(v) == str: v = v.encode()
     self.write(v)
   def unpack_bytes(self):
     l = self.unpack_varuint32()
     return self.read(l)
   def pack_string(self, v):
-    if type(v) == unicode: v = v.encode('utf8')
+    if type(v) == bytearray: 
+      v = v.decode("utf-8")
     self.pack_bytes(v)
   def unpack_string(self):
-    return self.unpack_bytes()
+    return self.unpack_bytes().decode('utf8')
 
   def pack_checksum160(self, v):
     raise Exception("not implementd")
@@ -301,9 +309,9 @@ class DataStream():
     raise Exception("not implementd")
 
   def pack_checksum256(self, v):
-    raise Exception("not implementd")
+    self.pack_sha256(v)
   def unpack_checksum256(self):
-    raise Exception("not implementd")
+    return self.unpack_sha256()
 
   def pack_checksum512(self, v):
     raise Exception("not implementd")
@@ -366,6 +374,18 @@ class DataStream():
       ("new_type_name", self.unpack_string()),
       ("type", self.unpack_string())
     ])
+
+  def pack_optional(self, type, v):
+    if v is None:
+      self.pack_uint8(0)
+    else:
+      self.pack_uint8(1)
+      getattr(self, 'pack_'+type)(v)
+
+  def unpack_optional(self, type):
+    if not self.unpack_uint8():
+      return None
+    return getattr(self, 'unpack_'+type)()
 
   def pack_field_def(self, v):
     self.pack_string(v["name"])
@@ -431,6 +451,15 @@ class DataStream():
       ("error_msg", self.unpack_string()),
     ])
 
+  def pack_variant(self, v):
+    self.pack_string(v["name"])
+    self.pack_array("string", v["types"])
+  def unpack_variant(self):
+    return OrderedDict([
+      ("name", self.unpack_string()),
+      ("types", self.unpack_array("string")),
+    ])
+
   def pack_abi(self, v):
     self.pack_string(v["version"])
     self.pack_array("type_def", v["types"])
@@ -440,8 +469,11 @@ class DataStream():
     self.pack_array("clause_pair", v["ricardian_clauses"])
     self.pack_array("error_message", v["error_messages"])
     self.pack_array("extension", v["abi_extensions"])
+    if "variants" in v:
+      self.pack_array("variant", v["variants"])
+
   def unpack_abi(self):
-    return OrderedDict([
+    tmp = OrderedDict([
       ("version", self.unpack_string()),
       ("types", self.unpack_array("type_def")),
       ("structs", self.unpack_array("struct_def")),
@@ -451,6 +483,12 @@ class DataStream():
       ("error_messages", self.unpack_array("error_message")),
       ("abi_extensions", self.unpack_array("extension"))
     ])
+
+    try:
+      tmp["variants"] = self.unpack_array("variant")
+    except:
+      pass
+    return tmp
 
   def pack_symbol(self, v):
     raise Exception("not implementd")
